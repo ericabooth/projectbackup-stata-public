@@ -1,0 +1,4 @@
+v 3
+d projectbackup: zip up a project folder (subfolders included) in native Stata
+d Eric A. Booth
+p projectbackup
