@@ -142,6 +142,8 @@ A runnable tour is in [`example_projectbackup.do`](example_projectbackup.do), an
 
 The tree is walked once in Mata to gather counts, byte totals, and path lengths, then handed to a single `zipfile` call with paths relative to the source folder. The archive folder is never packed into its own backup. Everything is native Stata, so there's no configuration and no platform-specific behavior — with one exception worth knowing: Windows' 260-character path limit applies when *extracting*, which is exactly what the long-path warning is there to catch in advance. For genuinely multi-GB trees, a dedicated archiver (7-Zip, `tar`) will be faster and give you compression control; `projectbackup` will tell you when you've reached that point.
 
-## License
+## Author and license
+
+Eric A. Booth, Sr Researcher, Texas 2036 (eric.a.booth@gmail.com).
 
 MIT © 2026 Eric A. Booth. See [LICENSE](LICENSE).
