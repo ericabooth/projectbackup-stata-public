@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.1  2026-11-09}{...}
+{* *! version 1.0.2  2026-11-09}{...}
 {viewerjumpto "Syntax" "projectbackup##syntax"}{...}
 {viewerjumpto "Description" "projectbackup##description"}{...}
 {viewerjumpto "Getting started" "projectbackup##quickstart"}{...}
@@ -26,7 +26,11 @@
 
 {p 4 4 2}
 {it:folder} is the directory to back up.  If omitted, the current working
-directory ({cmd:c(pwd)}) is used.  Quote it if it contains spaces.
+directory ({cmd:c(pwd)}) is used.  Quote it if it contains spaces.  Give one
+folder only; two quoted folders stop with error 198.  A leading {cmd:~} in
+{it:folder} or {cmd:archive()} is expanded by {cmd:projectbackup} itself, from
+{cmd:HOME} (from {cmd:USERPROFILE} on Windows), so the {cmd:~} examples below work
+on every platform; a full path works everywhere too.
 
 {synoptset 26 tabbed}{...}
 {synopthdr}
@@ -57,8 +61,7 @@ directory ({cmd:c(pwd)}) is used.  Quote it if it contains spaces.
 {synopt :{cmdab:zippy}}also save a {cmd:.zippy} copy (an email-safe {cmd:.zip} for SJ submissions){p_end}
 
 {syntab :Look before you leap}
-{synopt :{cmdab:dry:run}}scan and report size/counts/path lengths only; write nothing{p_end}
-{synopt :{cmdab:man:ifest}}(above) can be combined with {cmd:dryrun} once you commit to writing{p_end}
+{synopt :{cmdab:dry:run}}scan and report size/counts/path lengths only; write nothing (no zip, log, or manifest){p_end}
 {synopt :{cmd:force}}override the size / file-count safety stops{p_end}
 {synoptline}
 
@@ -169,6 +172,7 @@ it cannot break the Markdown table.
 {cmd:manifest} writes {it:zipname}{cmd:_manifest.txt} beside the zip: a sorted,
 plain-text list of every file that went in (paths relative to the source
 folder).  Useful as a quick "what was in that backup" index without unzipping.
+With {cmd:dryrun} no manifest is written, because nothing is written.
 
 {dlgtab:Housekeeping}
 
@@ -208,6 +212,11 @@ renames it back to {cmd:.zip}.  See {help projectbackup##zippy:Stata Journal}.
 {cmd:dryrun} does the full scan -- file count, total size, largest file, deepest
 nesting, longest path -- and prints a report {it:without writing anything}.  It
 is the safe way to size up an unfamiliar or possibly huge folder.
+
+{phang}
+If nothing is left to back up -- an empty folder, or one whose only entries are
+excluded by {cmd:exclude()} or {cmd:nodotfiles} -- {cmd:projectbackup} stops with
+error 459 ("nothing to back up") and writes nothing.
 
 {phang}
 {cmd:force} overrides the hard safety stops (see below).  It has no effect on the
@@ -303,6 +312,17 @@ renamed before emailing, because many mail systems block or quarantine
 {cmd:dryrun} stores everything except {cmd:r(zipfile)}, {cmd:r(zipbytes)}, and
 {cmd:r(seconds)}.  {cmd:removeall} stores {cmd:r(archive)} and
 {cmd:r(nremoved)} (count of files deleted).
+
+
+{pstd}
+Sizes in {cmd:r(size)}, the summary, and the log always use a period as the
+decimal mark, whatever {cmd:set dp} is.
+
+{pstd}
+Errors: 198, more than one folder given; 459, nothing to back up; 498, a hard
+safety stop fired (see {help projectbackup##safety:Safety checks}); 601, folder
+not found; 602, zip exists and neither {cmd:replace} nor {cmd:timestamp} was
+given; 693, the archive folder cannot be created.
 
 
 {marker examples}{...}

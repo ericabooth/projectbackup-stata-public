@@ -49,7 +49,9 @@ A plain run writes `<folder>/_archive/backup_<foldername>.zip`. Paths inside the
 | `dryrun`         | scan and report size / counts / path lengths only; write nothing |
 | `force`          | override the size / file-count safety stops |
 
-`projectbackup` is `rclass` — it returns `r(zipfile)`, `r(nfiles)`, `r(ndirs)`, `r(bytes)`, `r(zipbytes)`, `r(maxdepth)`, `r(maxplen)`, `r(size)`, `r(seconds)`, and more. See `help projectbackup`.
+`projectbackup` is `rclass`. A normal run returns `r(zipfile)`, `r(folder)`, `r(archive)`, `r(size)`, `r(nfiles)`, `r(ndirs)`, `r(bytes)`, `r(zipbytes)`, `r(maxdepth)`, `r(maxplen)`, and `r(seconds)`, plus `r(zippy)` with `zippy`. `dryrun` returns the same except `r(zipfile)`, `r(zipbytes)`, and `r(seconds)`, and writes nothing (no zip, log, or manifest). `removeall` returns `r(archive)` and `r(nremoved)`. See `help projectbackup`.
+
+A leading `~` in the folder or `archive()` is expanded by `projectbackup` itself, from `HOME` (from `USERPROFILE` on Windows), so the `~` examples below work on every platform. Give one folder only (two quoted folders stop with error 198). An empty folder, or one whose entries are all excluded, stops with error 459 ("nothing to back up").
 
 ## The best bits
 
@@ -132,7 +134,13 @@ projectbackup "~/MyProject", archive("~/Dropbox/backups") timestamp
 * 7. Package a folder for a Stata Journal submission
 projectbackup "~/sj-package", zippy
 
-* 8. Clear out every backup for this project
+* 8. A record of exactly what was archived
+projectbackup, manifest timestamp
+
+* 9. Measure a folder before committing to a backup (writes nothing)
+projectbackup "~/BigStudy", dryrun
+
+* 10. Clear out every backup for this project
 projectbackup, removeall
 ```
 
@@ -144,6 +152,7 @@ The tree is walked once in Mata to gather counts, byte totals, and path lengths,
 
 ## Changelog
 
+- **1.0.2 (9 Nov 2026).** Two quoted folders now stop with error 198 instead of a garbled "folder not found". Sizes always use a period as the decimal mark (before, `set dp comma` gave `1,1 KB` in the log). Help: the duplicate `manifest` row is gone, `dryrun` is stated to write no manifest, the empty-folder stop (r(459)) and the error codes are documented, and `~` expansion is explained. README lists every stored result.
 - **1.0.1 (9 Nov 2026).** `keep()` and `removeall` no longer touch other projects' backups in a shared archive folder when one prefix starts another (`backup_wave1` vs `backup_wave10`). `keep()` now rotates only this run's series (prefix + label + exact `_YYYYMMDD_HHMMSS`), orders it by stamp and counter, and never prunes the zip it just wrote. On Windows the default `_archive` folder is again excluded from each new backup. A leading `~` in the folder or `archive()` is expanded from `HOME` (`USERPROFILE` on Windows). The example and test files clean up with Mata instead of `shell rm -rf`.
 - **1.0.0 (20 Jul 2026).** First release.
 

@@ -1,4 +1,4 @@
-*! version 1.0.1  09nov2026  Eric A. Booth  (eric.a.booth@gmail.com)
+*! version 1.0.2  09nov2026  Eric A. Booth  (eric.a.booth@gmail.com)
 *! projectbackup : zip up a project folder, subfolders included, in native Stata
 *! (no external programs -- zipfile + Mata only)
 
@@ -28,6 +28,11 @@ program define projectbackup, rclass
 
 	*--- resolve and validate the source folder ------------------------------
 	local folder `folder'                        // strip any outer quotes
+	* two quoted folders leave an embedded quote behind; one folder only
+	if strpos(`"`folder'"', `"""') {
+		di as err "projectbackup: specify one folder (quote it if it contains spaces)"
+		exit 198
+	}
 	if `"`folder'"' == "" local folder `"`c(pwd)'"'
 	* a leading ~ is expanded here from HOME (USERPROFILE on Windows) rather
 	* than left to each command's own handling of it
@@ -381,6 +386,8 @@ program define _projbk_sizestr, rclass
 	else if `b' >= 1024       local s : di %9.1f (`b'/1024)
 	else                      local s "`b'"
 	local s = strtrim("`s'")
+	* always a period as the decimal mark, even under -set dp comma-
+	local s = subinstr("`s'", ",", ".", .)
 	if `b' >= 1073741824      return local s "`s' GB"
 	else if `b' >= 1048576    return local s "`s' MB"
 	else if `b' >= 1024       return local s "`s' KB"
