@@ -43,8 +43,8 @@ A plain run writes `<folder>/_archive/backup_<foldername>.zip`. Paths inside the
 | `toc`            | create/append `_backup_log.md` in the archive folder |
 | `note(str)`      | note recorded in the log row (turns on `toc`) |
 | `manifest`       | write `<zipname>_manifest.txt` listing every archived file |
-| `keep(#)`        | after backing up, keep only the newest `#` **timestamped** backups |
-| `removeall`      | delete all matching backups and make no new one |
+| `keep(#)`        | after backing up, keep only the newest `#` **timestamped** backups of this prefix and label; the new zip is never pruned |
+| `removeall`      | delete this prefix's backups (`<prefix>.zip`, `<prefix>_*.zip`, and `.zippy` twins) and make no new one |
 | `zippy`          | also save a `.zippy` copy for Stata Journal submissions |
 | `dryrun`         | scan and report size / counts / path lengths only; write nothing |
 | `force`          | override the size / file-count safety stops |
@@ -141,6 +141,11 @@ A runnable tour is in [`example_projectbackup.do`](example_projectbackup.do), an
 ## How it works (and its limits)
 
 The tree is walked once in Mata to gather counts, byte totals, and path lengths, then handed to a single `zipfile` call with paths relative to the source folder. The archive folder is never packed into its own backup. Everything is native Stata, so there's no configuration and no platform-specific behavior — with one exception worth knowing: Windows' 260-character path limit applies when *extracting*, which is exactly what the long-path warning is there to catch in advance. For genuinely multi-GB trees, a dedicated archiver (7-Zip, `tar`) will be faster and give you compression control; `projectbackup` will tell you when you've reached that point.
+
+## Changelog
+
+- **1.0.1 (9 Nov 2026).** `keep()` and `removeall` no longer touch other projects' backups in a shared archive folder when one prefix starts another (`backup_wave1` vs `backup_wave10`). `keep()` now rotates only this run's series (prefix + label + exact `_YYYYMMDD_HHMMSS`), orders it by stamp and counter, and never prunes the zip it just wrote. On Windows the default `_archive` folder is again excluded from each new backup. A leading `~` in the folder or `archive()` is expanded from `HOME` (`USERPROFILE` on Windows). The example and test files clean up with Mata instead of `shell rm -rf`.
+- **1.0.0 (20 Jul 2026).** First release.
 
 ## Author and license
 

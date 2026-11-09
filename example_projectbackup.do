@@ -12,9 +12,26 @@ clear all
 adopath ++ "`c(pwd)'"
 discard
 
+* remove a scratch tree with Mata (no shell, so it runs on every platform)
+capture mata: mata drop _pb_rmtree()
+mata:
+void _pb_rmtree(string scalar d)
+{
+	string colvector f
+	real scalar      i
+
+	if (!direxists(d)) return
+	f = dir(d, "files", "*", 1)
+	for (i = 1; i <= rows(f); i++) unlink(f[i])
+	f = dir(d, "dirs", "*", 1)
+	for (i = 1; i <= rows(f); i++) _pb_rmtree(f[i])
+	rmdir(d)
+}
+end
+
 *--- build a toy project ------------------------------------------------------
 local demo "`c(tmpdir)'/projectbackup_demo"
-capture shell rm -rf "`demo'"          // start clean if a prior run left files
+mata: _pb_rmtree(st_local("demo"))   // start clean if a prior run left files
 capture mkdir "`demo'"
 foreach d in code "data raw" output .git {
 	capture mkdir "`demo'/`d'"
@@ -53,7 +70,6 @@ projectbackup "`demo'", label(sj-submission) zippy replace
 display as text "zippy copy: " as result `"`r(zippy)'"'
 
 *--- clean up -----------------------------------------------------------------
-capture shell rm -rf "`demo'"          // macOS / Linux
-* On Windows instead:  shell rmdir /s /q "`demo'"
+mata: _pb_rmtree(st_local("demo"))   // works the same on every platform
 
 display as result _n "example_projectbackup.do finished."

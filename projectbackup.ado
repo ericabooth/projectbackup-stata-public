@@ -1,4 +1,4 @@
-*! version 1.0.0  20jul2026  Eric A. Booth  (eric.a.booth@gmail.com)
+*! version 1.0.1  09nov2026  Eric A. Booth  (eric.a.booth@gmail.com)
 *! projectbackup : zip up a project folder, subfolders included, in native Stata
 *! (no external programs -- zipfile + Mata only)
 
@@ -29,6 +29,17 @@ program define projectbackup, rclass
 	*--- resolve and validate the source folder ------------------------------
 	local folder `folder'                        // strip any outer quotes
 	if `"`folder'"' == "" local folder `"`c(pwd)'"'
+	* a leading ~ is expanded here from HOME (USERPROFILE on Windows) rather
+	* than left to each command's own handling of it
+	local home : environment HOME
+	if "`c(os)'" == "Windows" {
+		local up : environment USERPROFILE
+		local hd : environment HOMEDRIVE
+		local hp : environment HOMEPATH
+		if `"`up'"' != ""                  local home `"`up'"'
+		else if `"`hd'`hp'"' != ""         local home `"`hd'`hp'"'
+	}
+	mata: st_local("folder", _projbk_tilde(st_local("folder"), st_local("home")))
 	local pwd0 `"`c(pwd)'"'
 	capture quietly cd `"`folder'"'
 	if _rc {
@@ -45,6 +56,7 @@ program define projectbackup, rclass
 	else                  local prefix = subinstr(`"`prefix'"', " ", "_", .)
 
 	if `"`archive'"' == "" local archive `"`folder'/_archive"'
+	mata: st_local("archive", _projbk_tilde(st_local("archive"), st_local("home")))
 	mata: st_local("adexists", strofreal(direxists(st_local("archive"))))
 	if !`adexists' & "`dryrun'" == "" {
 		capture mkdir `"`archive'"'
@@ -65,8 +77,15 @@ program define projectbackup, rclass
 	if "`removeall'" != "" {
 		local ndel 0
 		foreach ext in zip zippy {
-			local todel : dir `"`archive'"' files "`prefix'*.`ext'", respectcase nofail
+			* List everything, then keep only this prefix's own names: the
+			* prefix exactly, then "." or "_".  A bare `prefix'* glob also
+			* matched other projects sharing the archive whose prefix merely
+			* starts the same way (backup_wave1 vs backup_wave10).
+			local todel : dir `"`archive'"' files "*.`ext'", respectcase nofail
 			foreach f of local todel {
+				mata: st_local("own", strofreal(_projbk_owned(st_local("f"), ///
+					st_local("prefix"), "`ext'")))
+				if !`own' continue
 				capture rm `"`archive'/`f'"'
 				if !_rc {
 					di as txt `"  removed  `f'"'
@@ -89,9 +108,21 @@ program define projectbackup, rclass
 	* use a wildcard (e.g. exclude(raw*)) to match a name that contains spaces.
 	local exlist : subinstr local exclude `"""' "", all
 	if "`nodotfiles'" != "" local exlist `exlist' .*
-	* always exclude the archive folder itself when it sits at the top level
-	if strpos(`"`archive'"', `"`folder'/"') == 1 {
-		local relarch = substr(`"`archive'"', strlen(`"`folder'"') + 2, .)
+	* always exclude the archive folder itself when it sits at the top level.
+	* Compare forward-slash forms: c(pwd) returns backslashes on Windows, so
+	* looking for `folder'/ in the raw path never matched there, and every
+	* backup swept in all the earlier ones.  Windows paths ignore case.
+	local F = subinstr(`"`folder'"', "\", "/", .)
+	local A = subinstr(`"`archive'"', "\", "/", .)
+	if "`c(os)'" == "Windows" {
+		local F = lower(`"`F'"')
+		local A = lower(`"`A'"')
+	}
+	if substr(`"`F'"', -1, 1) == "/" local F = substr(`"`F'"', 1, strlen(`"`F'"') - 1)
+	if substr(`"`A'"', -1, 1) == "/" local A = substr(`"`A'"', 1, strlen(`"`A'"') - 1)
+	if strpos(`"`A'"', `"`F'/"') == 1 {
+		* take the name from the original path so its case survives
+		local relarch = substr(`"`archive'"', strlen(`"`F'"') + 2, .)
 		if !strpos(`"`relarch'"', "/") & !strpos(`"`relarch'"', "\") {
 			local exlist `exlist' `"`relarch'"'
 		}
@@ -101,7 +132,7 @@ program define projectbackup, rclass
 			di as txt "      Consider a top-level folder (the default) or one outside the project."
 		}
 	}
-	else if `"`archive'"' == `"`folder'"' {
+	else if `"`A'"' == `"`F'"' {
 		di as txt "note: archive() is the source folder itself; earlier backups at the top"
 		di as txt "      level will be swept into every new backup."
 	}
@@ -267,34 +298,22 @@ program define projectbackup, rclass
 		}
 
 		*--- optional rotation -------------------------------------------------------
-		* Rotate only the timestamped series -- their names sort chronologically,
-		* so a name sort is a date sort.  Labelled or plain backups are left alone.
+		* Rotate one timestamped series: this prefix, this call's label (none by
+		* default), then exactly _YYYYMMDD_HHMMSS with an optional _n collision
+		* counter.  Other labels, untimestamped backups, and other projects that
+		* share the archive are never touched, and the zip just written is
+		* never pruned.  Sorting is on the stamp and counter, not the file name.
 		if "`keep'" != "" {
-			local zl : dir `"`archive'"' files "`prefix'*.zip", respectcase nofail
-			mata: _projbk_k = J(0, 1, "")
-			local nts 0
-			foreach f of local zl {
-				if regexm(`"`f'"', "_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9]+(_[0-9]+)?\.zip$") {
-					mata: _projbk_k = _projbk_k \ st_local("f")
-					local ++nts
-				}
-			}
-			if `nts' == 0 {
+			mata: st_local("ndel", strofreal(_projbk_rotate(st_local("archive"), ///
+				st_local("prefix") + st_local("lab"), st_local("zipname"), `keep')))
+			if `ndel' < 0 {
 				di as txt "note: keep() rotates only timestamped backups; none found, nothing pruned."
 				di as txt "      add {bf:timestamp} so each backup gets a unique, sortable name."
 			}
-			mata: _projbk_k = sort(_projbk_k, 1)
-			mata: st_local("nz", strofreal(rows(_projbk_k)))
-			local ndel = `nz' - `keep'
-			forvalues i = 1/`=max(`ndel',0)' {
-				mata: st_local("f", _projbk_k[`i'])
-				capture rm `"`archive'/`f'"'
-				capture rm `"`archive'/`= substr(`"`f'"', 1, strlen(`"`f'"') - 4)'.zippy"'
-				di as txt `"  pruned   `f'"'
+			else if `ndel' > 0 {
+				di as txt "  (kept the newest `keep' timestamped backups of " ///
+					as res `"`prefix'`lab'"' as txt ")"
 			}
-			mata: mata drop _projbk_k
-			if `ndel' > 0 di as txt "  (kept the newest `keep' backups; names sort " ///
-				"chronologically when you use {bf:timestamp})"
 		}
 
 		*--- summary --------------------------------------------------------------------
@@ -525,6 +544,70 @@ void _projbk_scan(string scalar root, string scalar exjoined, string scalar mani
 	st_local("pb_nskip",    strtrim(sprintf("%20.0f", S.nskip)))
 	st_local("pb_bigfile",  S.bigfile)
 	st_local("pb_maxpfile", S.maxpfile)
+}
+
+
+// expand a leading ~ (alone, ~/ or ~\) to the home folder h
+string scalar _projbk_tilde(string scalar p, string scalar h)
+{
+	if (substr(p, 1, 1) != "~" | h == "") return(p)
+	if (strlen(p) > 1 & !anyof(("/", "\"), substr(p, 2, 1))) return(p)  // ~user: leave
+	if (anyof(("/", "\"), substr(h, -1, 1)) & strlen(p) > 1) h = substr(h, 1, strlen(h) - 1)
+	return(h + substr(p, 2, .))
+}
+
+// is fn one of prefix's backups with extension ext?  The prefix must be
+// followed directly by "." or "_", so backup_wave1 does not own
+// backup_wave10_*.zip in a shared archive folder.
+real scalar _projbk_owned(string scalar fn, string scalar prefix, string scalar ext)
+{
+	real scalar L
+
+	L = strlen(prefix)
+	if (substr(fn, 1, L) != prefix) return(0)
+	if (substr(fn, L + 1, 1) == "_") return(substr(fn, -strlen(ext) - 1, .) == "." + ext)
+	return(substr(fn, L + 1, .) == "." + ext)
+}
+
+// prune the series stem_YYYYMMDD_HHMMSS[_n].zip in archive to the newest
+// keep files, never deleting current (the zip just written).  Returns the
+// number pruned, or -1 when no file of the series exists.
+real scalar _projbk_rotate(string scalar archive, string scalar stem,
+	string scalar current, real scalar keep)
+{
+	string colvector fl, nm, ky
+	string scalar    rest, f, zp
+	real scalar      i, L, n, ncur, ndel
+
+	fl   = dir(archive, "files", "*.zip", 0)
+	L    = strlen(stem)
+	nm   = J(0, 1, "")
+	ky   = J(0, 1, "")
+	ncur = 0
+	for (i = 1; i <= rows(fl); i++) {
+		if (substr(fl[i], 1, L) != stem) continue
+		rest = substr(fl[i], L + 1, .)
+		if (!regexm(rest, "^_([0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])_([0-9][0-9][0-9][0-9][0-9][0-9])(_([0-9]+))?\.zip$")) continue
+		if (fl[i] == current) {
+			ncur = 1
+			continue
+		}
+		n  = (regexs(4) == "" ? 0 : strtoreal(regexs(4)))
+		nm = nm \ fl[i]
+		ky = ky \ (regexs(1) + regexs(2) + sprintf("%012.0f", n))
+	}
+	if (rows(nm) + ncur == 0) return(-1)
+	ndel = rows(nm) - (keep - ncur)
+	if (ndel <= 0) return(0)
+	nm = nm[order(ky, 1)]
+	for (i = 1; i <= ndel; i++) {
+		f  = nm[i]
+		zp = substr(f, 1, strlen(f) - 4) + ".zippy"
+		unlink(archive + "/" + f)
+		if (fileexists(archive + "/" + zp)) unlink(archive + "/" + zp)
+		printf("{txt}  pruned   %s\n", f)
+	}
+	return(ndel)
 }
 
 end

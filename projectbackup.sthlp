@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0  2026-07-20}{...}
+{* *! version 1.0.1  2026-11-09}{...}
 {viewerjumpto "Syntax" "projectbackup##syntax"}{...}
 {viewerjumpto "Description" "projectbackup##description"}{...}
 {viewerjumpto "Getting started" "projectbackup##quickstart"}{...}
@@ -174,14 +174,23 @@ folder).  Useful as a quick "what was in that backup" index without unzipping.
 
 {phang}
 {cmd:keep(}{it:#}{cmd:)} keeps only the newest {it:#} {bf:timestamped} backups
-for this prefix, deleting older ones (and their {cmd:.zippy} twins) right after a
-successful backup.  Only names carrying a {cmd:_YYYYMMDD_HHMMSS} stamp are
-eligible, because only those sort by date; labelled or plain backups are never
-pruned.  Use {cmd:keep()} together with {cmd:timestamp}.
+in one series, deleting older ones (and their {cmd:.zippy} twins) right after a
+successful backup.  The series is this prefix plus this run's {cmd:label()} (no
+label by default) followed by exactly {cmd:_YYYYMMDD_HHMMSS}, with an optional
+{cmd:_}{it:n} counter for same-second runs; it is ordered by stamp and counter.
+The zip just written always counts as one of the {it:#} and is never pruned.
+Untimestamped backups, other labels' series, and other projects' backups in a
+shared archive folder are never touched.  Use {cmd:keep()} together with
+{cmd:timestamp}.
 
 {phang}
-{cmd:removeall} deletes every backup ({cmd:.zip} and {cmd:.zippy}) that matches
-the current prefix in the archive folder, and does {it:not} create a new one.
+{cmd:removeall} deletes every backup ({cmd:.zip} and {cmd:.zippy}) of the
+current prefix in the archive folder, and does {it:not} create a new one.  A file
+belongs to the prefix when its name is the prefix followed directly by {cmd:.}
+or {cmd:_}, so in a shared archive {cmd:backup_wave1} never claims
+{cmd:backup_wave10}'s files.  A prefix that extends this one with an underscore
+(e.g. a folder named {cmd:wave1_old}) cannot be told apart from a label; give
+such projects their own {cmd:prefix()} or archive folder.
 This is the cleanup counterpart to a normal run.
 
 {dlgtab:Stata Journal}

@@ -7,9 +7,26 @@ version 14
 adopath ++ "`c(pwd)'"
 discard
 
+* remove a scratch tree with Mata (no shell, so it runs on every platform)
+capture mata: mata drop _pb_rmtree()
+mata:
+void _pb_rmtree(string scalar d)
+{
+	string colvector f
+	real scalar      i
+
+	if (!direxists(d)) return
+	f = dir(d, "files", "*", 1)
+	for (i = 1; i <= rows(f); i++) unlink(f[i])
+	f = dir(d, "dirs", "*", 1)
+	for (i = 1; i <= rows(f); i++) _pb_rmtree(f[i])
+	rmdir(d)
+}
+end
+
 * ---- build a toy project tree in the scratch dir ---------------------------
 local root "`c(tmpdir)'/pbtest_root"
-capture shell rm -rf "`root'"
+mata: _pb_rmtree(st_local("root"))
 mkdir "`root'"
 mkdir "`root'/proj"
 mkdir "`root'/proj/code"
@@ -144,6 +161,71 @@ projectbackup "`root'/proj", archive("`root'/ext_archive") timestamp
 confirm file `"`r(zipfile)'"'
 assert strpos(`"`r(zipfile)'"', "ext_archive") > 0
 
-capture shell rm -rf "`root'"
+di as res _n "=== T13: a second run does not pack the default _archive ==="
+projectbackup "`root'/proj", timestamp
+local n1 = r(nfiles)
+sleep 1100
+projectbackup "`root'/proj", timestamp
+assert r(nfiles) == `n1'
+
+di as res _n "=== T14: shared archive -- one prefix extending another is left alone ==="
+foreach d in wave1 wave10 {
+	mkdir "`root'/`d'"
+	file open `fh' using "`root'/`d'/a.txt", write text
+	file write `fh' "`d'" _n
+	file close `fh'
+}
+mkdir "`root'/shared"
+projectbackup "`root'/wave10", archive("`root'/shared")
+projectbackup "`root'/wave10", archive("`root'/shared") timestamp
+sleep 1100
+projectbackup "`root'/wave10", archive("`root'/shared") timestamp
+sleep 1100
+projectbackup "`root'/wave1", archive("`root'/shared") timestamp
+sleep 1100
+projectbackup "`root'/wave1", archive("`root'/shared") timestamp keep(1)
+local zl : dir "`root'/shared" files "backup_wave10*.zip", respectcase
+assert `: word count `zl'' == 3
+local zl : dir "`root'/shared" files "backup_wave1_*.zip", respectcase
+assert `: word count `zl'' == 1
+projectbackup "`root'/wave1", archive("`root'/shared") removeall
+assert r(nremoved) == 1
+local zl : dir "`root'/shared" files "backup_wave10*.zip", respectcase
+assert `: word count `zl'' == 3
+
+di as res _n "=== T15: keep() leaves labelled series alone and keeps the new zip ==="
+mkdir "`root'/lab"
+projectbackup "`root'/proj", archive("`root'/lab") timestamp label(m1)
+sleep 1100
+projectbackup "`root'/proj", archive("`root'/lab") timestamp label(m2)
+sleep 1100
+projectbackup "`root'/proj", archive("`root'/lab") timestamp
+sleep 1100
+projectbackup "`root'/proj", archive("`root'/lab") timestamp keep(2)
+local newzip `"`r(zipfile)'"'
+sleep 1100
+projectbackup "`root'/proj", archive("`root'/lab") timestamp keep(1)
+confirm file `"`r(zipfile)'"'
+capture confirm file `"`newzip'"'
+assert _rc != 0                         // the older plain stamp was rotated out
+local zl : dir "`root'/lab" files "backup_proj_2*.zip", respectcase
+assert `: word count `zl'' == 1
+local zl : dir "`root'/lab" files "backup_proj_m*.zip", respectcase
+assert `: word count `zl'' == 2         // both labelled snapshots survive
+
+di as res _n "=== T16: same-second collisions rotate by counter, not name ==="
+mkdir "`root'/cc"
+foreach k in "" _1 _2 _10 {
+	file open `fh' using "`root'/cc/backup_proj_20200101_000000`k'.zip", write text
+	file write `fh' "x" _n
+	file close `fh'
+}
+projectbackup "`root'/proj", archive("`root'/cc") timestamp keep(2)
+confirm file `"`r(zipfile)'"'
+confirm file "`root'/cc/backup_proj_20200101_000000_10.zip"
+capture confirm file "`root'/cc/backup_proj_20200101_000000_2.zip"
+assert _rc != 0
+
+mata: _pb_rmtree(st_local("root"))
 di as res _n "=== ALL projectbackup TESTS PASSED ==="
 exit
