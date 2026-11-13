@@ -12,6 +12,14 @@ It is built for the everyday "let me snapshot this before I break it" habit: poi
 
 ## Install
 
+From SSC (version 1.0.0):
+
+```stata
+ssc install projectbackup
+```
+
+From GitHub (version 1.0.2, the latest):
+
 ```stata
 net install projectbackup, from("https://raw.githubusercontent.com/ericabooth/projectbackup-stata-public/main/") replace force
 help projectbackup
